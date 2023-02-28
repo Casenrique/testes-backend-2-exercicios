@@ -1,5 +1,5 @@
 import { UserDatabase } from "../database/UserDatabase"
-import { GetAllOutputDTO, LoginInputDTO, LoginOutputDTO, SignupInputDTO, SignupOutputDTO } from "../dtos/userDTO";
+import { DeleteUserInputDTO, DeleteUserOutputDTO, GetAllOutputDTO, LoginInputDTO, LoginOutputDTO, SignupInputDTO, SignupOutputDTO } from "../dtos/userDTO";
 import { BadRequestError } from "../errors/BadRequestError";
 import { NotFoundError } from "../errors/NotFoundError";
 import { User } from "../models/User";
@@ -121,6 +121,64 @@ export class UserBusiness {
     }
 
     public getAll = async (): Promise<GetAllOutputDTO> => {
+        const usersDB = await this.userDatabase.getAll()
+
+        const output = usersDB.map((userDB) => {
+            const user = new User(
+                userDB.id,
+                userDB.name,
+                userDB.email,
+                userDB.password,
+                userDB.role,
+                userDB.created_at
+            )
+
+            return user.toBusinessModel()
+        })
+
+        return output
+    }
+
+    public deleteUser = async (input: DeleteUserInputDTO): Promise<DeleteUserOutputDTO> => {
+        
+        const { idToDelete, token } = input
+       
+        if(token === undefined) {
+            throw new BadRequestError("token ausente")
+        }
+
+        const payload = this.tokenManager.getPayload(token)
+
+        if(payload === null) {
+            throw new BadRequestError("token inválido")
+        }
+        
+        const userDB: UserDB | undefined = await this.userDatabase.searchUserById(idToDelete)
+
+        if(!userDB) {
+            throw new NotFoundError("'id' do user não encontrado.")            
+        }
+
+        const creatorId = payload.id
+
+        if(payload.role !== USER_ROLES.ADMIN
+            && userDB.id !== creatorId
+            ) {
+            throw new BadRequestError("Somente o criador do user ou admistrador pode apagá-lo.")
+        }   
+        
+        await this.userDatabase.deleteUser(idToDelete)
+        
+        const output: DeleteUserOutputDTO = {
+            messsage: "Usuário apagado com sucesso!",
+            token: token
+        }
+
+        return output
+
+    }
+
+    public getUserById = async (): Promise<GetAllOutputDTO> => {
         const usersDB = await this.userDatabase.getAll()
 
         const output = usersDB.map((userDB) => {
